@@ -16,7 +16,7 @@ class DatasetUploadView(APIView):
 
         try:
 
-            EXPECTED_COLUMNS = ["date", "product_id", "product_name", "category", "quantity", "unit_price", "sales"]
+            EXPECTED_COLUMNS = ["model", "year", "region", "color", "transmission", "mileage_km", "price_usd", "sales_volume"]
 
             df = pd.read_csv(file)
             col_map = {c.lower(): c for c in EXPECTED_COLUMNS}
@@ -27,9 +27,6 @@ class DatasetUploadView(APIView):
                 if col not in df.columns:
                     df[col] = None
             df = df[EXPECTED_COLUMNS]
-
-            df["date"] = pd.to_datetime(df["date"], errors="coerce")
-            df["date"] = df["date"].apply(lambda x: x.to_pydatetime() if pd.notnull(x) else None)
             df = df.where(pd.notnull(df), None)
 
             upload_id = f"upload_{uuid.uuid4().hex}"
@@ -66,11 +63,6 @@ class DatasetUploadView(APIView):
         
 
     def get(self, request):
-        """
-        Fetch dataset contents.
-        If ?upload_id= is provided, filter by that upload_id.
-        Otherwise return all (limit for safety).
-        """
         upload_id = request.query_params.get("upload_id", None)
 
         query = {}
