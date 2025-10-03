@@ -98,16 +98,16 @@ class DatasetViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["post"], url_path="aggregate")
     def aggregate(self, request):
         """
-        Aggregate dataset based on X and Y axes and return grouped data.
-        User can choose aggregation function (sum, mean, count, min, max, etc.)
-        and optionally filter by year range (year_from, year_to).
+        Aggregate dataset directly in MongoDB.
+        Supports x_axis, y_axis, aggregation function,
+        and optional year range filtering.
         """
         upload_id = request.data.get("upload_id")
         x_axis = request.data.get("x_axis")
         y_axis = request.data.get("y_axis")
-        agg_func = request.data.get("agg_func", "sum")  
-        year_from = request.data.get("year_from")       
-        year_to = request.data.get("year_to")           
+        agg_func = request.data.get("agg_func", "sum")
+        year_from = request.data.get("year_from")
+        year_to = request.data.get("year_to")
 
         if not upload_id or not x_axis or not y_axis:
             return Response(
@@ -115,37 +115,13 @@ class DatasetViewSet(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Fetch dataset
-        records = list(dataset_collection.find({"upload_id": upload_id}, {"_id": 0}))
-        if not records:
-            return Response({"message": "No records found"}, status=status.HTTP_404_NOT_FOUND)
-
-        df = pd.DataFrame(records)
-
-        if x_axis not in df.columns or y_axis not in df.columns:
-            return Response(
-                {"error": "Invalid x_axis or y_axis"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Ensure numeric for y_axis
-        df[y_axis] = pd.to_numeric(df[y_axis], errors="coerce")
-
-        # ✅ Apply year range filter if present
-        if "year" in df.columns:
-            if year_from:
-                df = df[df["year"] >= int(year_from)]
-            if year_to:
-                df = df[df["year"] <= int(year_to)]
-
-        # Validate agg_func
+        # Map agg functions to MongoDB operators
         valid_funcs = {
-            "sum": "sum",
-            "avg": "mean",
-            "mean": "mean",
-            "count": "count",
-            "min": "min",
-            "max": "max"
+            "sum": "$sum",
+            "avg": "$avg",
+            "count": "$sum",  # handled differently below
+            "min": "$min",
+            "max": "$max",
         }
         if agg_func not in valid_funcs:
             return Response(
@@ -153,10 +129,39 @@ class DatasetViewSet(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Build match filter
+        match_stage = {"upload_id": upload_id}
+        if year_from or year_to:
+            year_filter = {}
+            if year_from:
+                year_filter["$gte"] = int(year_from)
+            if year_to:
+                year_filter["$lte"] = int(year_to)
+            match_stage["year"] = year_filter
+
+        # Build aggregation pipeline
+        pipeline = [
+            {"$match": match_stage},
+            {"$group": {
+                "_id": f"${x_axis}",
+                y_axis: (
+                    {"$sum": 1} if agg_func == "count"
+                    else {valid_funcs[agg_func]: f"${y_axis}"}
+                )
+            }},
+            {"$project": {
+                x_axis: "$_id",
+                y_axis: f"${y_axis}",
+                "_id": 0
+            }}
+        ]
+
         try:
-            grouped = df.groupby(x_axis)[y_axis].agg(valid_funcs[agg_func]).reset_index()
-            result = grouped.to_dict(orient="records")
+            result = list(dataset_collection.aggregate(pipeline))
+            if not result:
+                return Response({"message": "No records found"}, status=status.HTTP_404_NOT_FOUND)
             return Response(result, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 
