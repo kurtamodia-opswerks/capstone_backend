@@ -99,11 +99,15 @@ class DatasetViewSet(viewsets.ViewSet):
     def aggregate(self, request):
         """
         Aggregate dataset based on X and Y axes and return grouped data.
+        User can choose aggregation function (sum, mean, count, min, max, etc.)
+        and optionally filter by year range (year_from, year_to).
         """
         upload_id = request.data.get("upload_id")
         x_axis = request.data.get("x_axis")
         y_axis = request.data.get("y_axis")
-        agg_func = request.data.get("agg_func", "sum")  # default sum
+        agg_func = request.data.get("agg_func", "sum")  
+        year_from = request.data.get("year_from")       
+        year_to = request.data.get("year_to")           
 
         if not upload_id or not x_axis or not y_axis:
             return Response(
@@ -119,11 +123,40 @@ class DatasetViewSet(viewsets.ViewSet):
         df = pd.DataFrame(records)
 
         if x_axis not in df.columns or y_axis not in df.columns:
-            return Response({"error": "Invalid x_axis or y_axis"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Invalid x_axis or y_axis"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Ensure numeric for y_axis
+        df[y_axis] = pd.to_numeric(df[y_axis], errors="coerce")
+
+        # ✅ Apply year range filter if present
+        if "year" in df.columns:
+            if year_from:
+                df = df[df["year"] >= int(year_from)]
+            if year_to:
+                df = df[df["year"] <= int(year_to)]
+
+        # Validate agg_func
+        valid_funcs = {
+            "sum": "sum",
+            "avg": "mean",
+            "mean": "mean",
+            "count": "count",
+            "min": "min",
+            "max": "max"
+        }
+        if agg_func not in valid_funcs:
+            return Response(
+                {"error": f"Invalid agg_func. Choose from {list(valid_funcs.keys())}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
-            grouped = df.groupby(x_axis)[y_axis].agg(agg_func).reset_index()
+            grouped = df.groupby(x_axis)[y_axis].agg(valid_funcs[agg_func]).reset_index()
             result = grouped.to_dict(orient="records")
             return Response(result, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
