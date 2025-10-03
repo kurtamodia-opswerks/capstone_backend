@@ -153,7 +153,8 @@ class DatasetViewSet(viewsets.ViewSet):
                 x_axis: "$_id",
                 y_axis: f"${y_axis}",
                 "_id": 0
-            }}
+            }},
+            {"$sort": {x_axis: 1}}  # 🔹 Sort ascending by x_axis
         ]
 
         try:
@@ -163,5 +164,6 @@ class DatasetViewSet(viewsets.ViewSet):
             return Response(result, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 
 
