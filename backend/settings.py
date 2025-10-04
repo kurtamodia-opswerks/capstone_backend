@@ -83,6 +83,11 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 #     }
 # }
 
+# MongoDB connection settings
+MONGO_DB_NAME = "viz_db"
+MONGO_URI = "mongodb://localhost:27017"
+
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators

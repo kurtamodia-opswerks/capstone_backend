@@ -1,8 +1,9 @@
-import pymongo
+from django.conf import settings
+from pymongo import MongoClient
 
 url = 'mongodb://localhost:27017'
 
-client = pymongo.MongoClient(url)
+client = MongoClient(settings.MONGO_URI)
 
-db = client['viz_db']
+db = client[settings.MONGO_DB_NAME]
 
