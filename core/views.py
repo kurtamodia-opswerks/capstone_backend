@@ -154,7 +154,7 @@ class DatasetViewSet(viewsets.ViewSet):
                 y_axis: f"${y_axis}",
                 "_id": 0
             }},
-            {"$sort": {x_axis: 1}}  # 🔹 Sort ascending by x_axis
+            {"$sort": {x_axis: 1}}  
         ]
 
         try:
